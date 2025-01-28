@@ -1,82 +1,119 @@
 import cv2
 import numpy as np
+from ultralytics import YOLO
 
-def main():
-    # Open the default camera
-    cap = cv2.VideoCapture(0)
+# Load the pre-trained YOLOv8 model
+model = YOLO("yolov8n.pt")
 
+
+# Function to detect the color of the traffic light
+def detect_traffic_light_color(frame, xmin, ymin, xmax, ymax):
+    # Extract the region of interest (ROI) for the traffic light
+    roi = frame[ymin:ymax, xmin:xmax]
+    
+    # Convert the image from BGR to HSV color space
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    
+    # Define the HSV ranges for red, green, and yellow
+    lower_red = np.array([0, 100, 100])
+    upper_red = np.array([10, 255, 255])
+    
+    lower_green = np.array([40, 50, 50])
+    upper_green = np.array([90, 255, 255])
+    
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([40, 255, 255])
+
+    # Create masks for red, green, and yellow colors
+    red_mask = cv2.inRange(hsv, lower_red, upper_red)
+    green_mask = cv2.inRange(hsv, lower_green, upper_green)
+    yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    
+    # Calculate the area (number of pixels) for each color
+    red_area = np.sum(red_mask)
+    green_area = np.sum(green_mask)
+    yellow_area = np.sum(yellow_mask)
+
+    # Determine the traffic light status based on the color area
+    if red_area > green_area and red_area > yellow_area:
+        return "Red"
+    elif green_area > red_area and green_area > yellow_area:
+        return "Green"
+    elif yellow_area > red_area and yellow_area > green_area:
+        return "Yellow"
+    else:
+        return "Unknown"
+
+
+# Function to detect traffic lights in the frame
+def detect_traffic_lights(frame):
+    # Perform inference using the YOLO model
+    results = model.predict(frame, conf=0.5)
+    boxes = results[0].boxes
+    traffic_lights = []
+
+    # Iterate over the detection results
+    for box in boxes:
+        cls = int(box.cls)  # Get the class of the detected object
+        conf = float(box.conf)  # Get the confidence of the detection
+        if cls == 9:  # Class ID 9 corresponds to traffic lights
+            xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist())
+            color = detect_traffic_light_color(frame, xmin, ymin, xmax, ymax)
+            traffic_lights.append((xmin, ymin, xmax, ymax, conf, color))
+
+    return traffic_lights
+
+
+# Function to draw detection boxes and show the traffic light status
+def draw_boxes(frame, traffic_lights):
+    for (xmin, ymin, xmax, ymax, conf, color) in traffic_lights:
+        # Draw the bounding box around the traffic light
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        # Display the traffic light color and confidence score
+        cv2.putText(
+            frame,
+            f"{color} ({conf:.2f})",
+            (xmin, ymin - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            2,
+        )
+    return frame
+
+
+# Real-time detection of traffic lights
+def detect_video():
+    cap = cv2.VideoCapture(0)  # Open the camera
     if not cap.isOpened():
-        print("Unable to open the camera")
+        print("Error: Cannot access the camera.")
         return
 
-    print("Press 'q' to exit the program")
-    
     while True:
-        # Read a video frame
         ret, frame = cap.read()
         if not ret:
-            print("Unable to capture video frame")
+            print("Error: Cannot read frame from camera.")
             break
 
-        # Convert the frame to HSV color space
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        # Resize the video frame to improve inference speed
+        frame = cv2.resize(frame, (640, 360))
 
-        # Define the HSV range for red color (to adapt to different brightness conditions)
-        lower_red1 = np.array([0, 120, 70])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 120, 70])
-        upper_red2 = np.array([180, 255, 255])
+        # Detect traffic lights in the frame
+        traffic_lights = detect_traffic_lights(frame)
 
-        # Create a mask to capture pixels within the red color range
-        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask = mask1 + mask2
+        # Draw the detection results on the frame
+        frame_with_boxes = draw_boxes(frame, traffic_lights)
 
-        # Use morphological operations to clean up noise (optional)
-        kernel = np.ones((5, 5), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        # Display the processed frame
+        cv2.imshow("YOLOv8 Traffic Light Detection", frame_with_boxes)
 
-        # Find contours of the red regions
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if contours:
-            # Find the largest contour by area
-            largest_contour = max(contours, key=cv2.contourArea)
-            if cv2.contourArea(largest_contour) > 500:  # Ignore regions that are too small
-                # Calculate the centroid
-                M = cv2.moments(largest_contour)
-                if M["m00"] != 0:
-                    cX = int(M["m10"] / M["m00"])
-                    cY = int(M["m01"] / M["m00"])
-
-                    # Draw the centroid and the contour
-                    cv2.circle(frame, (cX, cY), 5, (0, 255, 0), -1)
-                    cv2.drawContours(frame, [largest_contour], -1, (0, 255, 0), 2)
-
-                    # Control logic
-                    frame_center = frame.shape[1] // 2
-                    if cX < frame_center - 50:
-                        direction = "Turn Left"
-                    elif cX > frame_center + 50:
-                        direction = "Turn Right"
-                    else:
-                        direction = "Move Forward"
-
-                    # Display the direction
-                    cv2.putText(frame, direction, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                    print(direction)
-
-        # Display the original video and the mask
-        cv2.imshow("Video Stream", frame)
-        cv2.imshow("Red Object Mask", mask)
-
-        # Press 'q' to exit the program
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # Exit the loop if the 'q' key is pressed
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-    # Release the camera and close the windows
-    cap.release()
-    cv2.destroyAllWindows()
+    cap.release()  # Release the camera
+    cv2.destroyAllWindows()  # Close all OpenCV windows
+
 
 if __name__ == "__main__":
-    main()
+    detect_video()  # Start the real-time traffic light detection
