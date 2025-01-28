@@ -36,9 +36,9 @@ def detect_traffic_light_color(frame, xmin, ymin, xmax, ymax):
 
     # Determine the traffic light status based on the color area
     if red_area > green_area and red_area > yellow_area:
-        return "Red"
+        return "Red"  # Stop command
     elif green_area > red_area and green_area > yellow_area:
-        return "Green"
+        return "Green"  # Accelerate command
     elif yellow_area > red_area and yellow_area > green_area:
         return "Yellow"
     else:
