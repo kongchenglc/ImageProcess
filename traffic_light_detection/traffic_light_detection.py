@@ -48,7 +48,7 @@ def detect_traffic_light_color(frame, xmin, ymin, xmax, ymax):
 # Function to detect traffic lights in the frame
 def detect_traffic_lights(frame):
     # Perform inference using the YOLO model
-    results = model.predict(frame, conf=0.5)
+    results = model.predict(frame, conf=0.5) # confidence threshold
     boxes = results[0].boxes
     traffic_lights = []
 
