@@ -21,7 +21,7 @@ This project demonstrates real-time traffic light detection using the YOLOv8 mod
 3. **Run the Script**:
 
    ```bash
-   python traffic_light_detection.py
+   python ./src/traffic_light_detection.py
    ```
 
 4. **Real-time Detection**:
