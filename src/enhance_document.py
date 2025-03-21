@@ -3,7 +3,6 @@ import numpy as np
 
 # python ./src/enhance_document.py  
 
-# Function to add a title on the image
 def add_title(image, title):
     # Font settings for the title text
     font = cv2.FONT_HERSHEY_SIMPLEX
