@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+# python ./src/enhance_document.py  
 
 # Function to add a title on the image
 def add_title(image, title):
